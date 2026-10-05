@@ -27,6 +27,11 @@ python3 -m venv .venv && ./.venv/bin/pip install numpy
 
 （仓库里已经带了建好的 `tables.npz`，clone 下来就能用，不用先建表。）
 
+> **环境**：Python 3.9+ 和 numpy（见 `requirements.txt`），没有别的依赖。
+> 版本影响建表速度：Python 3.12 + numpy 2.5 约 4 秒，Python 3.9 + numpy 2.0 约 8 秒。
+> 另外 numpy < 2.5 在 macOS 上会从 BLAS 抛出 `divide by zero encountered in matmul`
+> 一类的**假警告**（纯随机数组也能复现，结果不受影响），代码里已定向屏蔽。
+
 ---
 
 ## 命令

@@ -160,3 +160,14 @@ def load_preset(name):
 
 def bits(mask):
     return [b for b in range(mask.bit_length()) if mask >> b & 1]
+
+
+def quiet_blas():
+    """Silence bogus floating-point warnings raised by BLAS matmul.
+
+    macOS Accelerate sets FP status flags on perfectly finite input, and
+    numpy < 2.5 surfaces them as "divide by zero / overflow / invalid value
+    encountered in matmul".  Reproducible with plain random arrays; results
+    are unaffected (checked against a row-wise dot product).
+    """
+    return np.errstate(all="ignore")

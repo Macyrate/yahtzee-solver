@@ -78,9 +78,11 @@ def continue_values(ru, s, rl):
     """u[k] / u2[k] = value of holding keep k with 1 / 2 rerolls left"""
     names, parts = final_parts(ru, s, rl)
     ef = parts.max(axis=0)
-    u = T @ ef
+    with R.quiet_blas():
+        u = T @ ef
     e2 = np.where(MASK, u[IDX], -np.inf).max(axis=1)
-    u2 = T @ e2
+    with R.quiet_blas():
+        u2 = T @ e2
     return names, parts, u, u2
 
 

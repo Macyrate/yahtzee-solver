@@ -47,9 +47,11 @@ def build(rs, verbose=True):
 
     def turn_value(next_vals):
         ef = next_vals.max(axis=0)
-        u = T @ ef
+        with R.quiet_blas():
+            u = T @ ef
         e2 = np.where(MASK, u[IDX], -np.inf).max(axis=1)
-        u2 = T @ e2
+        with R.quiet_blas():
+            u2 = T @ e2
         e1 = np.where(MASK, u2[IDX], -np.inf).max(axis=1)
         return float(R.probs @ e1)
 
@@ -100,9 +102,11 @@ def build(rs, verbose=True):
                     parts.append(SC_LO[b][None, :]
                                  + W[ru][s_list, rl ^ (1 << b)][:, None])
                 ef = np.maximum.reduce(parts)
-                u = ef @ T.T
+                with R.quiet_blas():
+                    u = ef @ T.T
                 e2 = np.where(MASK, u[:, IDX], -np.inf).max(axis=2)
-                u2 = e2 @ T.T
+                with R.quiet_blas():
+                    u2 = e2 @ T.T
                 e1 = np.where(MASK, u2[:, IDX], -np.inf).max(axis=2)
                 W[ru][s_list, rl] = e1 @ R.probs
                 done += 1

@@ -30,6 +30,13 @@ python3 -m venv .venv && ./.venv/bin/pip install numpy
 
 `tables.npz` is committed, so a fresh clone works immediately — no build step.
 
+> **Requirements:** Python 3.9+ and numpy (`requirements.txt`); nothing else.
+> The version only affects build speed — Python 3.12 + numpy 2.5 takes ~4 s,
+> Python 3.9 + numpy 2.0 takes ~8 s. Note that numpy < 2.5 on macOS emits
+> bogus warnings from BLAS (`divide by zero encountered in matmul` and
+> friends). They reproduce on plain random arrays and do not affect results;
+> the code silences them at the matmul sites.
+
 ---
 
 ## Commands
