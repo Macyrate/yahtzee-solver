@@ -1,0 +1,26 @@
+{
+  "preset": "clubhouse",
+  "title": "《世界游戏大全 51》快艇骰子",
+  "bonus": { "threshold": 63, "value": 35 },
+  "categories": [
+    { "id": "aces",   "name": "1点", "en": "Aces",   "kind": "upper", "rule": "upper", "face": 1 },
+    { "id": "twos",   "name": "2点", "en": "Twos",   "kind": "upper", "rule": "upper", "face": 2 },
+    { "id": "threes", "name": "3点", "en": "Threes", "kind": "upper", "rule": "upper", "face": 3 },
+    { "id": "fours",  "name": "4点", "en": "Fours",  "kind": "upper", "rule": "upper", "face": 4 },
+    { "id": "fives",  "name": "5点", "en": "Fives",  "kind": "upper", "rule": "upper", "face": 5 },
+    { "id": "sixes",  "name": "6点", "en": "Sixes",  "kind": "upper", "rule": "upper", "face": 6 },
+
+    { "id": "four_kind", "name": "四条", "en": "Four of a Kind", "kind": "lower",
+      "rule": "n_kind", "params": { "n": 4, "score": "sum" } },
+    { "id": "full_house", "name": "葫芦", "en": "Full House", "kind": "lower",
+      "rule": "full_house", "params": { "score": "sum" } },
+    { "id": "small_straight", "name": "小顺", "en": "Small Straight", "kind": "lower",
+      "rule": "straight", "params": { "length": 4, "score": 15 } },
+    { "id": "large_straight", "name": "大顺", "en": "Large Straight", "kind": "lower",
+      "rule": "straight", "params": { "length": 5, "score": 30 } },
+    { "id": "yacht", "name": "快艇", "en": "Yahtzee", "kind": "lower",
+      "rule": "all_same", "params": { "score": 50 } },
+    { "id": "chance", "name": "机会", "en": "Chance", "kind": "lower",
+      "rule": "sum", "params": {} }
+  ]
+}
