@@ -1,246 +1,195 @@
 # yahtzee-solver
 
-An **exact optimal-play solver** for Yahtzee. No heuristics, no lookup tables —
-it runs backward induction over the entire game, so it can tell you the
-expected-value-optimal move at any point, and your **win probability** from any
-pair of scorecards.
+A command-line Yahtzee advisor that recommends which dice to keep, reroll, and score to **maximize expected final score**.
 
-> [中文说明](README.md)
+The solver enumerates game states with dynamic programming and precomputes their values. A separate Monte Carlo simulator estimates win, draw, and loss probabilities when both players follow the expected-score strategy.
 
-Two rulesets ship with it:
+[中文说明](README.md) · [Quick start](#quick-start) · [Usage](#usage) · [Rules and limitations](#rules-and-limitations) · [Development and validation](#development-and-validation)
 
-| Preset | Rules | Columns | Optimal EV |
-|---|---|---|---|
-| **`clubhouse`** | *Clubhouse Games: 51 Worldwide Games* | 12 | **191.77** |
-| **`standard`** | Standard Yahtzee (Hasbro) | 13 | **245.91** |
+## Features
 
-The active ruleset lives in `config.json` and is meant to be edited. Adding your
-own variant is a matter of writing a few JSON lines.
+- **Advice after each roll:** compare keep choices, expected final scores, and the cost of alternatives.
+- **Scorecard tracking:** calculate category scores, upper-section progress, and the bonus.
+- **Win probability estimates:** simulate the remaining game from both scorecards.
+- **JSON rulesets:** use either included preset or adjust category scoring.
 
----
+| Preset | Scoring model | Categories | Expected opening score¹ |
+| --- | --- | --- | --- |
+| `clubhouse` | Yahtzee in *Clubhouse Games: 51 Worldwide Classics* | 12 | 191.774 |
+| `standard` | A simplified model based on standard Yahtzee | 13 | 245.905 |
+
+¹ These are the preset values recorded in this repository. The `standard` model omits additional Yahtzee bonuses and Joker rules, so its value is not the optimum for the complete official rules.
 
 ## Quick start
 
+Requires **Python 3.9+** and **NumPy >= 1.24**. On macOS or Linux:
+
 ```bash
-git clone https://github.com/Macyrate/yahtzee-solver
+git clone https://github.com/Macyrate/yahtzee-solver.git
 cd yahtzee-solver
-python3 -m venv .venv && ./.venv/bin/pip install numpy
-./.venv/bin/python advise.py adv "1 3 3 3 4" 2
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python advise.py rules
 ```
 
-`tables.npz` is committed, so a fresh clone works immediately — no build step.
+In Windows PowerShell, create the environment with `py -3 -m venv .venv` and activate it with `.\.venv\Scripts\Activate.ps1`.
 
-> **Requirements:** Python 3.9+ and numpy (`requirements.txt`); nothing else.
-> The version only affects build speed — Python 3.12 + numpy 2.5 takes ~4 s,
-> Python 3.9 + numpy 2.0 takes ~8 s. Note that numpy < 2.5 on macOS emits
-> bogus warnings from BLAS (`divide by zero encountered in matmul` and
-> friends). They reproduce on plain random arrays and do not affect results;
-> the code silences them at the matmul sites.
-
----
-
-## Commands
-
-Assumes you ran `source .venv/bin/activate`.
-
-### Inspect the ruleset / start a new game
+The repository includes `tables.npz`; no build is needed while it matches the active configuration. It also includes an existing scorecard. **Starting a new game clears `state.json`; back it up first if you want to keep it:**
 
 ```bash
-python advise.py rules          # print the scorecard rules + three EV baselines
-python advise.py reset          # clear the scorecard
-```
-
-### Ask what to keep, after each roll
-
-```bash
+python advise.py reset
 python advise.py adv "1 3 3 3 4" 2
 ```
 
-The second argument is the number of **rerolls remaining**: `2` right after the
-first roll, `1` after the second, `0` after the third (when you have to score).
+The `2` means two rerolls remain. After each actual roll, enter the new dice and remaining reroll count. Once no rerolls remain, choose a category to score.
 
-You get the optimal keep, the resulting expected final score, and how much each
-runner-up would cost you.
+## Usage
 
-### Record a column
+Run these commands from the project directory with the virtual environment activated.
+
+### Inspect the rules and scorecard
 
 ```bash
-python advise.py take 3点 "1 2 3 3 3"
+python advise.py rules
+python advise.py show
 ```
 
-The score is computed from the dice, and the upper-section progress plus the new
-optimal expectation are printed.
+The CLI currently prints Chinese labels. With the `clubhouse` preset, the baseline output includes:
 
-### Win probability
+```text
+开局最优期望 (全部 12 栏): 191.774
+上区单练                     : 71.952
+下区单练                     : 88.660
+```
+
+These are the expected scores for the full game, upper section alone, and lower section alone.
+
+### Get advice and record a score
+
+```bash
+python advise.py adv "1 3 3 3 4" 2
+python advise.py adv "1 2 3 3 3" 0
+python advise.py take 3点 "1 2 3 3 3"
+python advise.py show
+```
+
+| Input | Meaning |
+| --- | --- |
+| `"1 3 3 3 4"` | Five dice, each from 1 to 6, separated by spaces and quoted |
+| `2` / `1` / `0` | Rerolls remaining; `0` compares scoring choices |
+| `3点` | A category name from the active ruleset; see `rules` output |
+
+The included presets use Chinese category names for commands; `3点` means Threes. `adv` reads the current scorecard, while `take` calculates and writes a score to `state.json`. **Calling `take` again for the same category overwrites its previous score.**
+
+### Estimate win probability
 
 ```bash
 python pwin.py 8 6000 "1点=2,2点=8,3点=12,机会=22"
 ```
 
 | Argument | Meaning |
-|---|---|
-| 1 | Your turns remaining (= columns you still have open) |
-| 2 | Monte-Carlo samples (default 3000; 6000 takes ~3 s, ±0.6%) |
-| 3 | **The opponent's full scorecard**, as `name=score,…`; use `""` if empty |
+| --- | --- |
+| `8` | Expected turns remaining, checked against both scorecards |
+| `6000` | Samples per player; defaults to 3000 when omitted |
+| `"category=score,…"` | All filled opponent categories, including zeros; use `""` for an empty card |
 
-Your own scorecard is read from `state.json`.
+Your scorecard is read from `state.json`. Omitted opponent categories are treated as unfilled. If the first argument does not match the remaining categories, the program prints a warning and uses **each player's actual number of unfilled categories**. Output includes mean final scores, P10 / P90 percentiles, and win/draw/loss proportions.
 
-> **On the numbers:** if you have just finished your turn and the opponent has
-> not rolled yet, the engine is comparing "you have N turns, they have N+1" and
-> the result is **pessimistic**. Once they roll too, both sides are on the same
-> footing.
+These are finite-sample estimates; the program does not report confidence intervals. More samples generally reduce sampling error and increase runtime.
 
-### Switch rulesets
+### Switch rules or rebuild tables
 
 ```bash
-python use.py                   # list presets, mark the active one
-python use.py standard          # switch to standard Yahtzee and rebuild (~10 s)
-python use.py clubhouse         # switch back (~5 s)
+python use.py                 # List presets
+python use.py standard        # Replace config.json and rebuild tables.npz
+python use.py clubhouse       # Restore the default preset and rebuild
+python solve.py --check       # Display the active rules without building
+python solve.py               # Rebuild from config.json
 ```
 
-### Self-checks
+Save custom configuration and scorecard data before switching. `use.py` does not reset `state.json`; run `python advise.py reset` to start a new game after switching. Build time depends on ruleset size, hardware, and the NumPy / BLAS environment.
 
-```bash
-python verify.py                # independent Monte-Carlo check of the baselines
-python verify.py 32 56 20       # check one arbitrary position (ru, s, rl)
-python advise.py sim 20000      # whole-game simulation against the DP value
-```
+## Rules and limitations
 
----
+The model assumes five fair, independent six-sided dice, up to three rolls per turn, and the option to keep any subset between rolls.
 
-## Files
+- Advice maximizes **expected final score**, which does not necessarily maximize the chance of winning a particular game.
+- Win simulations assume both players follow that strategy. Different opponent behavior can change the actual probability in either direction.
+- `standard` omits the +100 bonus for additional Yahtzees and scorecard-dependent Joker scoring. Both presets accept five identical dice as a full house. It is therefore a simplified variant.
+- Dynamic programming enumerates states but uses floating-point arithmetic. “Exact” describes the algorithm's lack of strategy heuristics, not an absence of numerical error.
+- Keep the custom upper-section bonus threshold at **63** for now: table construction caps the subtotal at 63. Editing JSON alone does not provide support for arbitrary thresholds.
 
-| File | Role |
-|---|---|
-| `rules.py` | ruleset → scoring matrix, dice space, mask helpers |
-| `solve.py` | builds the tables (the only slow step) |
-| `advise.py` | move advisor + scorecard + whole-game simulation |
-| `pwin.py` | win-probability engine |
-| `use.py` | preset switcher |
-| `verify.py` | independent Monte-Carlo self-check |
-| `config.json` | **the active ruleset** — edit this |
-| `presets/` | ready-made rulesets (clubhouse / standard) |
-| `state.json` | the scorecard for the game in progress |
-| `results/` | game logs; `game-1.json` is a 197:188 win |
+### Customize scoring
 
----
-
-## Custom rulesets
-
-`config.json` *is* the active ruleset. Each column names a **rule** plus that
-rule's parameters:
+Start from a configuration in `presets/`. Each category specifies a `kind`, a `rule`, and any rule parameters. For example:
 
 ```json
 {
-  "preset": "my-variant",
-  "title": "My variant",
-  "bonus": { "threshold": 63, "value": 35 },
-  "categories": [
-    { "name": "Aces", "kind": "upper", "rule": "upper", "face": 1 },
-    { "name": "Four of a Kind", "kind": "lower", "rule": "n_kind",
-      "params": { "n": 4, "score": "sum" } },
-    { "name": "Full House", "kind": "lower", "rule": "full_house",
-      "params": { "score": 25 } }
-  ]
+  "name": "四条",
+  "kind": "lower",
+  "rule": "n_kind",
+  "params": { "n": 4, "score": "sum" }
 }
 ```
 
-| `rule` | Matches when | Parameters |
-|---|---|---|
-| `upper` | always | `face` (1–6); score = face × count |
-| `n_kind` | at least `n` dice match | `n`, `score` (`"sum"` or a fixed number) |
-| `full_house` | 3+2, or all five equal | `score` (`"sum"` or a fixed number) |
-| `straight` | `length` consecutive faces present | `length`, `score` |
-| `all_same` | all five dice equal | `score` |
-| `sum` | always | none; score = total of all five dice |
+| `rule` | Scoring condition | Parameters |
+| --- | --- | --- |
+| `upper` | Sum of dice showing the specified face | Category property `face`: 1–6 |
+| `n_kind` | At least n identical dice | `n`, `score`: `"sum"` or a fixed score |
+| `full_house` | 3+2 or five identical dice | `score`: `"sum"` or a fixed score |
+| `straight` | At least `length` consecutive faces | `length`, `score` |
+| `all_same` | Five identical dice | `score` |
+| `sum` | Sum of all five dice | None |
 
-**One constraint:** columns with `kind: "upper"` must come first — their subtotal
-is what the bonus is measured against — and column order is the bit order inside
-the solver's masks. After editing, run `python solve.py` to rebuild; if you
-forget, the tools will refuse to run against stale tables.
-
-The two files in `presets/` are worked examples. `use.py` just copies one over
-`config.json` and rebuilds.
-
----
+Upper categories must precede all lower categories. Category names should be unique, and category order determines mask bit positions. After editing `config.json`, run `python solve.py`. The advisor checks the configuration fingerprint and refuses mismatched tables.
 
 ## How it works
 
-The state space is
+The between-turn state is `(remaining upper mask, upper subtotal, remaining lower mask)`. Backward induction computes the optimal expected future score. Within each turn, the solver enumerates 252 unordered dice outcomes and 462 possible keeps, comparing actions through their reroll transition probabilities.
 
+`solve.py` precomputes the value tables. `advise.py` loads them and combines them with the current scorecard. `pwin.py` uses the resulting strategy to simulate both players' remaining games.
+
+## Development and validation
+
+| File | Responsibility |
+| --- | --- |
+| [rules.py](rules.py) | Configuration, scoring matrices, dice space, and mask helpers |
+| [solve.py](solve.py) | Dynamic-programming table construction |
+| [advise.py](advise.py) | Advice, scorecards, and full-game simulation |
+| [pwin.py](pwin.py) | Final-score and win/draw/loss simulation |
+| [use.py](use.py) | Preset switching |
+| [verify.py](verify.py) | Statistical checks with separate rolling and scoring paths |
+| [config.json](config.json) / [presets/](presets/) | Active configuration / included presets |
+| `tables.npz` | Precomputed data with a configuration fingerprint |
+| [state.json](state.json) / [results/](results/) | Current scorecard / historical game records |
+| [AGENTS.md](AGENTS.md) | Repository collaboration guidelines in Chinese |
+
+Lightweight checks:
+
+```bash
+python -m py_compile rules.py solve.py advise.py pwin.py use.py verify.py
+python solve.py --check
+python advise.py rules
 ```
-(remaining upper mask, current upper subtotal, remaining lower mask)  ×  252 rolls
+
+After changing scoring or solver logic, rebuild and run statistical validation as appropriate:
+
+```bash
+python solve.py
+python verify.py                # Defaults to 8000 games per check
+python verify.py 32 56 20 1000   # Position (ru, s, rl) and sample count
+python advise.py sim 20000      # Full-game simulation
 ```
 
-252 is the number of distinct **multisets** of five dice — not 6⁵ = 7776 ordered
-outcomes, since the dice are indistinguishable. The three rolls inside a turn are
-handled by a single keep→reroll transition tensor.
+Full simulations may take a while. `verify.py` rolls and scores through separate paths, but its action policy still depends on the DP tables. It checks agreement between simulated means and DP expectations; it is not an independent proof of optimality. Statistical checks can fluctuate. Include the ruleset, sample count, and runtime environment when reporting results.
 
-That is about 176k states and 5 seconds for the 12-column Clubhouse ruleset, and
-about 350k states and 10 seconds for standard 13-column Yahtzee.
+### Contributing
 
----
+Report problems through [Issues](https://github.com/Macyrate/yahtzee-solver/issues) or submit a pull request. For decision-related bugs, include the configuration, filled scorecard, dice, rerolls remaining, actual output, and expected behavior.
 
-## Does it actually compute the right numbers?
-
-Every baseline is checked against an **independent** Monte-Carlo simulation that
-rolls real dice and scores them through a separate code path. That catches the
-kind of bug a self-consistent DP hides — wrong transition probabilities, bad mask
-arithmetic, a double-counted bonus.
-
-| Ruleset | Check | DP | Simulation |
-|---|---|---|---|
-| clubhouse | full game | 191.774 | 192.37 ± 0.70 |
-| clubhouse | upper section only | 71.952 | 71.82 ± 0.45 |
-| clubhouse | lower section only | 88.660 | 87.89 ± 0.47 |
-| standard | full game | 245.905 | 245.47 ± 0.72 |
-| standard | upper section only | 71.952 | 71.82 ± 0.45 |
-| standard | lower section only | 140.030 | 140.07 ± 0.56 |
-
-The refactor that added multi-ruleset support reproduces the old
-single-ruleset numbers **bit for bit**. The standard scoring table was also
-hand-checked on edge-case rolls — e.g. `5 5 5 5 5` scores 25 as three of a kind,
-25 as four of a kind, 25 as a full house, and 50 as a Yahtzee, all at once.
-
-**Known limitation:** standard mode does **not** implement the Yahtzee bonus
-(+100 for extra Yahtzees). That needs "has Yahtzee been used yet?" in the state,
-which doubles the state space. So 245.91 sits below the published optimum of
-254.59 — the 8.68 gap is exactly what the Yahtzee bonus is worth.
-
----
-
-## Two counterintuitive results
-
-**1. Never spend a high-value column on a cheap score.**
-
-Given `1 2 4 6 6` on the first turn, taking **Sixes for 12** costs you 10 points
-of expected value compared to taking **Aces for 1**. Sixes is the biggest box in
-the upper section (max 30), and cashing it in for 12 drops your chance of the +35
-bonus from **54.2% to 12.1%**. (Both figures measured by simulating the two
-resulting positions 8000 times each.)
-
-Same pattern elsewhere: `4 4 4 4 1` should go to Fours for 16, not Four of a Kind
-for 17. And `4 6 6 6 6` should go to Four of a Kind for 28, not Chance for 28 —
-a 15.1-point difference.
-
-**2. Abandon a column early rather than half-heartedly.**
-
-Facing `2 4 4 6 6`, chasing a large straight succeeds only 16% of the time. You
-are better off using that turn to build a big Chance score (~24) and chasing the
-large straight from scratch next turn — from scratch it succeeds 26% of the time.
-
----
-
-## Assumptions and caveats
-
-- Both players are modelled as **expected-score maximisers**. Against a weaker
-  opponent your real win probability is **higher** than the number printed.
-- The advice is **expected-score optimal, not win-probability optimal**. The two
-  coincide almost everywhere, but when you are far behind and need variance, the
-  EV-maximising line is not necessarily the one that maximises your chance of
-  winning.
-- The dice have to be fair. I have no way to check that one.
+Run checks appropriate to your change. Scoring or solver changes should cover edge-case rolls and both presets. Keep personal scorecards, historical records, and unrelated regenerated tables out of changes. Update both READMEs when CLI or ruleset behavior changes.
 
 ## License
 
-[MIT](LICENSE)
+[MIT License](LICENSE), Copyright © 2026 Macyrate.
